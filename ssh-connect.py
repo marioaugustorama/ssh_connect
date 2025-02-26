@@ -8,46 +8,54 @@ from collections import defaultdict
 
 
 def listar_hosts_ssh():
-    """Lê o arquivo de configuração SSH e retorna uma lista de hosts e seus detalhes."""
+    """Lê ~/.ssh/config e retorna uma lista de hosts e seus detalhes, incluindo comentários."""
     config_data = defaultdict(dict)
     hosts = []
+    comentario_atual = None  # Armazena o comentário antes do host correspondente
 
     with open(os.path.expanduser("~/.ssh/config"), "r") as f:
         host_atual = None
 
         for linha in f:
             linha = linha.strip()
-            if linha.lower().startswith("host "):
+            
+            # Se for um comentário (## Algo sobre este host), armazena
+            if linha.startswith("##"):
+                comentario_atual = linha[2:].strip()
+            
+            elif linha.lower().startswith("host "):  # Definição de um novo host
                 host_atual = linha.split(maxsplit=1)[1]
                 hosts.append(host_atual)
                 config_data[host_atual] = {}
+                
+                # Se havia um comentário antes, associamos ao host
+                if comentario_atual:
+                    config_data[host_atual]["Comentário"] = comentario_atual
+                    comentario_atual = None  # Resetar para o próximo host
+            
             elif host_atual and " " in linha:
                 chave, valor = linha.split(maxsplit=1)
-                config_data[host_atual][chave.lower()] = valor
+                if chave != "#": # Ignora linhas iniciadas com #
+                    config_data[host_atual][chave] = valor
 
-    return hosts, config_data  # Retorna tanto os hosts quanto os detalhes
-
-
+    return hosts, config_data  # Retorna hosts + detalhes
 
 def menu_navegavel(stdscr, hosts, host_details):
-    """Cria um menu interativo com box para selecionar um host."""
+    """Cria um menu interativo com comentários."""
     stdscr.clear()
     altura, largura = stdscr.getmaxyx()
-
     titulo = "Selecione um host para conectar"
     x_titulo = max(0, (largura - len(titulo)) // 2)
 
     cursor = 0
-    offset = 0  # Define o deslocamento da rolagem
-    max_hosts_visiveis = altura - 8  # Ajuste para caber dentro do box
+    offset = 0
+    max_hosts_visiveis = altura - 10
 
-    # Define o tamanho da caixa
-    box_altura = max_hosts_visiveis + 2  # Altura suficiente para mostrar os hosts
-    box_largura = min(50, largura // 2 - 4)  # Largura do box ajustável
+    box_altura = max_hosts_visiveis + 2
+    box_largura = min(50, largura // 2 - 4)
     box_y = (altura - box_altura) // 2
     box_x = 2
 
-    # Define o tamanho da caixa de detalhes
     detalhes_x = box_x + box_largura + 2
     detalhes_largura = largura - detalhes_x - 2
     detalhes_altura = box_altura
@@ -56,46 +64,50 @@ def menu_navegavel(stdscr, hosts, host_details):
         stdscr.clear()
         stdscr.addstr(1, x_titulo, titulo, curses.A_BOLD)
 
-        # Criar uma subjanela (window) dentro do terminal para o box
         box_win = stdscr.subwin(box_altura, box_largura, box_y, box_x)
-        box_win.box()  # Desenha a borda ao redor do menu
+        box_win.box()
 
-        # Criar a subjanela para exibir os detalhes do host
         detalhes_win = stdscr.subwin(detalhes_altura, detalhes_largura, box_y, detalhes_x)
         detalhes_win.box()
         detalhes_win.addstr(1, 2, "Detalhes do Host:", curses.A_BOLD)
 
-        # Ajusta o deslocamento da lista
         if cursor < offset:
             offset = cursor
         elif cursor >= offset + max_hosts_visiveis:
             offset = cursor - max_hosts_visiveis + 1
 
-        # Exibe apenas os hosts visíveis dentro do box
+        y = box_y + 1
+
         for i in range(max_hosts_visiveis):
             index = offset + i
             if index >= len(hosts):
                 break
 
-            y = box_y + 1 + i  # Dentro do box
-            x = box_x + 2  # Ajusta para dentro da borda
-
+            host = hosts[index]
+            x = box_x + 2
             if index == cursor:
-                stdscr.addstr(y, x, f"> {hosts[index]}", curses.A_REVERSE)
+                stdscr.addstr(y, x, f"> {host}", curses.A_REVERSE)
             else:
-                stdscr.addstr(y, x, f"  {hosts[index]}")
+                stdscr.addstr(y, x, f"  {host}")
 
-        # Exibir detalhes do host selecionado
+            y += 1
+
         host_info = host_details.get(hosts[cursor], {})
+        linha_atual = 2
+
         if not host_info:
-            detalhes_win.addstr(2, 2, "Nenhuma informação disponível")
+            detalhes_win.addstr(linha_atual, 2, "Nenhuma informação disponível")
         else:
-            for i, (chave, valor) in enumerate(host_info.items()):
-                if i + 2 < detalhes_altura - 1:
-                    detalhes_win.addstr(i + 2, 2, f"{chave}: {valor}")
-         
-        # Barra de status fixa na parte inferior
-        status_text = "[↑/↓] Navegar  [Enter] Conectar  [PgUp/PgDn] Rolar  [Home/End] Início/Fim  [Q/Esc] Sair"
+            for chave, valor in host_info.items():
+                if chave != "Comentário" and linha_atual < detalhes_altura - 1:
+                    detalhes_win.addstr(linha_atual, 2, f"{chave}: {valor}")
+                    linha_atual += 1
+
+            # Adiciona o comentário no final, se existir
+            if "Comentário" in host_info and linha_atual < detalhes_altura - 1:
+                detalhes_win.addstr(linha_atual + 1, 2, f"Comentário: {host_info['Comentário']}")
+
+        status_text = f"[↑/↓] Navegar  [Enter] Conectar  [PgUp/PgDn] Rolar  [Home/End] Início/Fim  [Q/Esc] Sair | Hosts: {len(hosts)}"
         stdscr.attron(curses.A_REVERSE)
         stdscr.addstr(altura - 2, 0, status_text[:largura].ljust(largura))
         stdscr.attroff(curses.A_REVERSE)
@@ -103,33 +115,20 @@ def menu_navegavel(stdscr, hosts, host_details):
         stdscr.refresh()
         key = stdscr.getch()
 
-        # Navegação com setas ↑ ↓
         if key == curses.KEY_UP and cursor > 0:
             cursor -= 1
         elif key == curses.KEY_DOWN and cursor < len(hosts) - 1:
             cursor += 1
-
-        # Página inteira para cima (Page Up)
         elif key == curses.KEY_PPAGE:
             cursor = max(0, cursor - max_hosts_visiveis)
-
-        # Página inteira para baixo (Page Down)
         elif key == curses.KEY_NPAGE:
             cursor = min(len(hosts) - 1, cursor + max_hosts_visiveis)
-
-        # Ir para o primeiro item (Home)
         elif key == curses.KEY_HOME:
             cursor = 0
-
-        # Ir para o último item (End)
         elif key == curses.KEY_END:
             cursor = len(hosts) - 1
-
-        # Selecionar com ENTER
-        elif key == 10:  # ENTER
+        elif key == 10:
             return hosts[cursor]
-
-        # Sair com Q ou Esc
         elif key in [27, ord('q')]:
             return None
 
