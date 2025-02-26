@@ -56,16 +56,45 @@ def menu_navegavel(stdscr, hosts):
             else:
                 stdscr.addstr(y, x, f"  {hosts[index]}")
 
+        # Barra de status na parte inferior
+        status_text = "[↑/↓] Navegar  [Enter] Conectar  [PgUp/PgDn] Rolar  [Home/End] Início/Fim  [Q/Esc] Sair"
+        stdscr.attron(curses.A_REVERSE)  # Inverte as cores para destacar
+        stdscr.addstr(altura - 2, 0, status_text[:largura].ljust(largura))  # Preenche toda a linha
+        stdscr.attroff(curses.A_REVERSE)
+
         stdscr.refresh()
         key = stdscr.getch()
 
-        # Navegação com setas ↑ ↓ e controle de rolagem
+        # Navegação com setas ↑ ↓
         if key == curses.KEY_UP and cursor > 0:
             cursor -= 1
         elif key == curses.KEY_DOWN and cursor < len(hosts) - 1:
             cursor += 1
+
+        # Página inteira para cima (Page Up)
+        elif key == curses.KEY_PPAGE:
+            cursor = max(0, cursor - max_hosts_visiveis)
+
+        # Página inteira para baixo (Page Down)
+        elif key == curses.KEY_NPAGE:
+            cursor = min(len(hosts) - 1, cursor + max_hosts_visiveis)
+
+        # Ir para o primeiro item (Home)
+        elif key == curses.KEY_HOME:
+            cursor = 0
+
+        # Ir para o último item (End)
+        elif key == curses.KEY_END:
+            cursor = len(hosts) - 1
+        
+        # Selecionar com ENTER
         elif key == 10:  # ENTER
             return hosts[cursor]
+
+        # Sair com Q ou Esc
+        elif key in [27, ord('q')]:
+            return None
+
 
 def conectar_ssh(host):
     """Executa o comando SSH para conectar ao host."""
@@ -73,10 +102,15 @@ def conectar_ssh(host):
     subprocess.run(["ssh", host])
 
 if __name__ == "__main__":
-    hosts = listar_hosts_ssh()
-    if not hosts:
-        print("Nenhum host encontrado.")
-    else:
-        host_escolhido = curses.wrapper(menu_navegavel, hosts)  # Inicia a interface curses
-        conectar_ssh(host_escolhido)
+    while True:
+        hosts = listar_hosts_ssh()
+        if not hosts:
+            print("Nenhum host encontrado.")
+            break
 
+        host_escolhido = curses.wrapper(menu_navegavel, hosts)
+        
+        if not host_escolhido:
+            break  # Sai do programa se o usuário pressionar Q ou Esc
+        
+        conectar_ssh(host_escolhido)
