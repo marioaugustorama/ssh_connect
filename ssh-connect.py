@@ -18,39 +18,48 @@ def listar_hosts_ssh(config_path=os.path.expanduser("~/.ssh/config")):
         print(f"Arquivo {config_path} não encontrado.")
     return hosts
 
+import curses
+
 def menu_navegavel(stdscr, hosts):
     stdscr.clear()
     altura, largura = stdscr.getmaxyx()
 
-    # Título centralizado
     titulo = "Selecione um host para conectar"
     x_titulo = max(0, (largura - len(titulo)) // 2)
-    stdscr.addstr(1, x_titulo, titulo, curses.A_BOLD)
-
-    # Limita a quantidade de hosts exibidos para caber na tela
-    max_hosts_visiveis = min(len(hosts), altura - 5)  # -5 para evitar estouro
-    start_y = max(2, (altura - max_hosts_visiveis) // 2)  # Evita posição negativa
 
     cursor = 0
+    offset = 0  # Define o deslocamento da rolagem
+
+    max_hosts_visiveis = altura - 5  # Número máximo de itens visíveis (-5 evita estouro)
+
     while True:
         stdscr.clear()
         stdscr.addstr(1, x_titulo, titulo, curses.A_BOLD)
 
-        for i, host in enumerate(hosts[:max_hosts_visiveis]):
-            y = start_y + i
-            x = max(0, (largura - len(host)) // 2)
+        # Ajusta o deslocamento da lista quando o cursor atinge os limites visíveis
+        if cursor < offset:
+            offset = cursor
+        elif cursor >= offset + max_hosts_visiveis:
+            offset = cursor - max_hosts_visiveis + 1
 
-            # Evita erro de saída de tela
-            if 0 <= y < altura and 0 <= x < largura:
-                if i == cursor:
-                    stdscr.addstr(y, x, f"> {host}", curses.A_REVERSE)
-                else:
-                    stdscr.addstr(y, x, f"  {host}")
+        # Exibe apenas os hosts visíveis
+        for i in range(max_hosts_visiveis):
+            index = offset + i
+            if index >= len(hosts): 
+                break  # Evita erro se acabar a lista
+
+            y = 3 + i
+            x = max(0, (largura - len(hosts[index])) // 2)
+
+            if index == cursor:
+                stdscr.addstr(y, x, f"> {hosts[index]}", curses.A_REVERSE)
+            else:
+                stdscr.addstr(y, x, f"  {hosts[index]}")
 
         stdscr.refresh()
         key = stdscr.getch()
 
-        # Navegação com setas ↑ ↓
+        # Navegação com setas ↑ ↓ e controle de rolagem
         if key == curses.KEY_UP and cursor > 0:
             cursor -= 1
         elif key == curses.KEY_DOWN and cursor < len(hosts) - 1:
