@@ -2,10 +2,13 @@
 
 import os
 import re
+import sys
 import curses
 import subprocess
 from collections import defaultdict
 
+
+SSH_CONFIG_PATH = os.path.expanduser("~/.ssh/config")
 
 def listar_hosts_ssh():
     """Lê ~/.ssh/config e retorna uma lista de hosts e seus detalhes, incluindo comentários."""
@@ -13,7 +16,7 @@ def listar_hosts_ssh():
     hosts = []
     comentario_atual = None  # Armazena o comentário antes do host correspondente
 
-    with open(os.path.expanduser("~/.ssh/config"), "r") as f:
+    with open(SSH_CONFIG_PATH, "r") as f:
         host_atual = None
 
         for linha in f:
@@ -160,18 +163,30 @@ def conectar_ssh(host):
 
 
 if __name__ == "__main__":
-    while True:
-        hosts, host_details = listar_hosts_ssh()  # Agora retorna os detalhes corretamente
-        if not hosts:
-            print("Nenhum host encontrado.")
-            break
+    hosts, host_details = listar_hosts_ssh()  # Carrega a lista de hosts
 
+    if not hosts:
+        print("Nenhum host encontrado.")
+        sys.exit(1)
+
+    if len(sys.argv) > 1:
+        # Se um host foi passado na linha de comando, conecta diretamente
+        host_escolhido = sys.argv[1]
+
+        if host_escolhido not in hosts:
+            print(f"Erro: O host '{host_escolhido}' não está no arquivo ~/.ssh/config.")
+            sys.exit(1)
+
+        conectar_ssh(host_escolhido)
+        sys.exit(0)  # Sai após a conexão SSH
+
+    # Caso contrário, exibe o menu interativo
+    while True:
         host_escolhido = curses.wrapper(menu_navegavel, hosts, host_details)
 
         if not host_escolhido:
             break  # Sai do programa se o usuário pressionar Q ou Esc
-        
+
         conectar_ssh(host_escolhido)
 
-        curses.wrapper(menu_navegavel, hosts, host_details)
-
+        curses.wrapper(menu_navegavel, hosts, host_details)  # Retorna ao menu após sair do SSH
