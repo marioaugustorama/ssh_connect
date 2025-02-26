@@ -28,6 +28,7 @@ def listar_hosts_ssh():
     return hosts, config_data  # Retorna tanto os hosts quanto os detalhes
 
 
+
 def menu_navegavel(stdscr, hosts, host_details):
     """Cria um menu interativo com box para selecionar um host."""
     stdscr.clear()
@@ -134,8 +135,28 @@ def menu_navegavel(stdscr, hosts, host_details):
 
 
 def conectar_ssh(host):
-    """Executa o comando SSH para conectar ao host."""
-    print(f"\nConectando ao host: {host}...\n")
+    """Mostra a box de conexão, sai do modo curses e inicia o SSH."""
+    def _mostrar_mensagem(stdscr):
+        """Mostra a box "Conectando ao host..." antes de sair do modo curses."""
+        stdscr.clear()
+        altura, largura = stdscr.getmaxyx()
+
+        box_altura = 5
+        box_largura = len(f"Conectando ao host {host}...") + 6
+        box_y = (altura - box_altura) // 2
+        box_x = (largura - box_largura) // 2
+
+        msg_win = stdscr.subwin(box_altura, box_largura, box_y, box_x)
+        msg_win.box()
+        msg_win.addstr(2, 3, f"Conectando ao host {host}...", curses.A_BOLD)
+
+        stdscr.refresh()
+        curses.napms(1500)  # Exibe a mensagem por 1,5 segundos antes de fechar
+
+    # Exibe a mensagem antes de sair do modo curses
+    curses.wrapper(_mostrar_mensagem)
+
+    # Inicia a conexão SSH sem interferência do curses
     subprocess.run(["ssh", host])
 
 
@@ -150,6 +171,8 @@ if __name__ == "__main__":
 
         if not host_escolhido:
             break  # Sai do programa se o usuário pressionar Q ou Esc
-
+        
         conectar_ssh(host_escolhido)
+
+        curses.wrapper(menu_navegavel, hosts, host_details)
 
