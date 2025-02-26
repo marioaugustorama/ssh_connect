@@ -18,9 +18,8 @@ def listar_hosts_ssh(config_path=os.path.expanduser("~/.ssh/config")):
         print(f"Arquivo {config_path} não encontrado.")
     return hosts
 
-import curses
-
 def menu_navegavel(stdscr, hosts):
+    """Cria um menu interativo com box para selecionar um host."""
     stdscr.clear()
     altura, largura = stdscr.getmaxyx()
 
@@ -29,37 +28,46 @@ def menu_navegavel(stdscr, hosts):
 
     cursor = 0
     offset = 0  # Define o deslocamento da rolagem
+    max_hosts_visiveis = altura - 8  # Ajuste para caber dentro do box
 
-    max_hosts_visiveis = altura - 5  # Número máximo de itens visíveis (-5 evita estouro)
+    # Define o tamanho da caixa
+    box_altura = max_hosts_visiveis + 2  # Altura suficiente para mostrar os hosts
+    box_largura = min(50, largura - 4)  # Largura do box (ajustável)
+    box_y = (altura - box_altura) // 2
+    box_x = 2
 
     while True:
         stdscr.clear()
         stdscr.addstr(1, x_titulo, titulo, curses.A_BOLD)
 
-        # Ajusta o deslocamento da lista quando o cursor atinge os limites visíveis
+        # Criar uma subjanela (window) dentro do terminal para o box
+        box_win = stdscr.subwin(box_altura, box_largura, box_y, box_x)
+        box_win.box()  # Desenha a borda ao redor do menu
+
+        # Ajusta o deslocamento da lista
         if cursor < offset:
             offset = cursor
         elif cursor >= offset + max_hosts_visiveis:
             offset = cursor - max_hosts_visiveis + 1
 
-        # Exibe apenas os hosts visíveis
+        # Exibe apenas os hosts visíveis dentro do box
         for i in range(max_hosts_visiveis):
             index = offset + i
-            if index >= len(hosts): 
-                break  # Evita erro se acabar a lista
+            if index >= len(hosts):
+                break
 
-            y = 3 + i
-            x = max(0, (largura - len(hosts[index])) // 2)
+            y = box_y + 1 + i  # Dentro do box
+            x = box_x + 2  # Ajusta para dentro da borda
 
             if index == cursor:
                 stdscr.addstr(y, x, f"> {hosts[index]}", curses.A_REVERSE)
             else:
                 stdscr.addstr(y, x, f"  {hosts[index]}")
 
-        # Barra de status na parte inferior
+        # Barra de status fixa na parte inferior
         status_text = "[↑/↓] Navegar  [Enter] Conectar  [PgUp/PgDn] Rolar  [Home/End] Início/Fim  [Q/Esc] Sair"
-        stdscr.attron(curses.A_REVERSE)  # Inverte as cores para destacar
-        stdscr.addstr(altura - 2, 0, status_text[:largura].ljust(largura))  # Preenche toda a linha
+        stdscr.attron(curses.A_REVERSE)
+        stdscr.addstr(altura - 2, 0, status_text[:largura].ljust(largura))
         stdscr.attroff(curses.A_REVERSE)
 
         stdscr.refresh()
@@ -86,7 +94,7 @@ def menu_navegavel(stdscr, hosts):
         # Ir para o último item (End)
         elif key == curses.KEY_END:
             cursor = len(hosts) - 1
-        
+
         # Selecionar com ENTER
         elif key == 10:  # ENTER
             return hosts[cursor]
@@ -94,7 +102,6 @@ def menu_navegavel(stdscr, hosts):
         # Sair com Q ou Esc
         elif key in [27, ord('q')]:
             return None
-
 
 def conectar_ssh(host):
     """Executa o comando SSH para conectar ao host."""
