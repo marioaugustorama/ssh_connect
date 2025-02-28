@@ -10,6 +10,10 @@ from collections import defaultdict
 
 SSH_CONFIG_PATH = os.path.expanduser("~/.ssh/config")
 
+if not os.path.exists(SSH_CONFIG_PATH):
+    print(f"Config file does not exist: {SSH_CONFIG_PATH}")
+    sys.exit(1)
+
 def listar_hosts_ssh():
     """Lê ~/.ssh/config e retorna uma lista de hosts e seus detalhes, incluindo comentários."""
     config_data = defaultdict(dict)
