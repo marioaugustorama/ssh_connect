@@ -161,32 +161,40 @@ def conectar_ssh(host):
     # Inicia a conexão SSH sem interferência do curses
     subprocess.run(["ssh", host])
 
+try: 
+    if __name__ == "__main__":
+        hosts, host_details = listar_hosts_ssh()  # Carrega a lista de hosts
 
-if __name__ == "__main__":
-    hosts, host_details = listar_hosts_ssh()  # Carrega a lista de hosts
-
-    if not hosts:
-        print("Nenhum host encontrado.")
-        sys.exit(1)
-
-    if len(sys.argv) > 1:
-        # Se um host foi passado na linha de comando, conecta diretamente
-        host_escolhido = sys.argv[1]
-
-        if host_escolhido not in hosts:
-            print(f"Erro: O host '{host_escolhido}' não está no arquivo ~/.ssh/config.")
+        if not hosts:
+            print("Nenhum host encontrado.")
             sys.exit(1)
 
-        conectar_ssh(host_escolhido)
-        sys.exit(0)  # Sai após a conexão SSH
+        if len(sys.argv) > 1:
+            # Se um host foi passado na linha de comando, conecta diretamente
+            host_escolhido = sys.argv[1]
 
-    # Caso contrário, exibe o menu interativo
-    while True:
-        host_escolhido = curses.wrapper(menu_navegavel, hosts, host_details)
+            if host_escolhido not in hosts:
+                print(f"Erro: O host '{host_escolhido}' não está no arquivo ~/.ssh/config.")
+                sys.exit(1)
 
-        if not host_escolhido:
-            break  # Sai do programa se o usuário pressionar Q ou Esc
+            conectar_ssh(host_escolhido)
+            sys.exit(0)  # Sai após a conexão SSH
 
-        conectar_ssh(host_escolhido)
+        # Caso contrário, exibe o menu interativo
+        while True:
+            host_escolhido = curses.wrapper(menu_navegavel, hosts, host_details)
 
-        curses.wrapper(menu_navegavel, hosts, host_details)  # Retorna ao menu após sair do SSH
+            if not host_escolhido:
+                break  # Sai do programa se o usuário pressionar Q ou Esc
+
+            conectar_ssh(host_escolhido)
+
+            curses.wrapper(menu_navegavel, hosts, host_details)  # Retorna ao menu após sair do SSH
+
+except KeyboardInterrupt:
+    try:
+        curses.endwin() 
+    except curses.error:
+        pass
+    print("\nSaindo... (Ctrl+C pressionado)")
+    sys.exit(0)
