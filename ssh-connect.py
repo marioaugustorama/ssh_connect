@@ -5,18 +5,24 @@ import re
 import sys
 import curses
 import subprocess
+import argparse
+import tempfile
 from collections import defaultdict
 
 
 SSH_CONFIG_PATH = os.path.expanduser("~/.ssh/config")
 
 def listar_hosts_ssh():
-    """Lê ~/.ssh/config e retorna uma lista de hosts e seus detalhes, incluindo comentários."""
+    """Lê o arquivo de configuracao e retorna uma lista de hosts e seus detalhes, incluindo comentários."""
+    if not os.path.exists(config_path):
+        print(f"Erro: O arquivo de configuração '{config_path} não existe.")
+        sys.exit(1)
+
     config_data = defaultdict(dict)
     hosts = []
     comentario_atual = None  # Armazena o comentário antes do host correspondente
 
-    with open(SSH_CONFIG_PATH, "r") as f:
+    with open(config_path, "r") as f:
         host_atual = None
 
         for linha in f:
@@ -136,6 +142,24 @@ def menu_navegavel(stdscr, hosts, host_details):
             return None
 
 
+def criar_config_temporario(config_path, keys_dir):
+    """Cria um arquivo de configuração temporário com os caminhos de `IdentityFile` ajustados."""
+    temp_config = tempfile.NamedTemporaryFile(delete=False, mode="w")
+    temp_path = temp_config.name
+
+    with open(config_path, "r") as original, open(temp_path, "w") as temp:
+        for linha in original:
+            if linha.strip().startswith("IdentityFile") and keys_dir:
+                _, old_path = linha.split(maxsplit=1)
+                filename = os.path.basename(old_path.strip())
+                new_path = os.path.join(keys_dir, filename)
+                temp.write(f"  IdentityFile {new_path}\n")
+            else:
+                temp.write(linha)
+
+    return temp_path  # Retorna o caminho do arquivo temporário
+
+
 def conectar_ssh(host):
     """Mostra a box de conexão, sai do modo curses e inicia o SSH."""
     def _mostrar_mensagem(stdscr):
@@ -158,21 +182,40 @@ def conectar_ssh(host):
     # Exibe a mensagem antes de sair do modo curses
     curses.wrapper(_mostrar_mensagem)
 
-    # Inicia a conexão SSH sem interferência do curses
-    subprocess.run(["ssh", host])
+    # Se um diretório de chaves foi informado, criar um config temporário
+    final_config_path = criar_config_temporario(config_path, keys_dir) if keys_dir else config_path
 
-try: 
-    if __name__ == "__main__":
+    # Inicia a conexão SSH sem interferência do curses
+    ssh_command = ["ssh", "-F", final_config_path, host]
+    subprocess.run(ssh_command)
+
+if __name__ == "__main__":
+    try:
+        parser = argparse.ArgumentParser(description="Gerenciador de conexões SSH")
+        parser.add_argument("-f", "--file", help="Especifica um arquivo de configuração SSH", required=False, metavar="CONFIG", default=SSH_CONFIG_PATH)
+        parser.add_argument("-k", "--keys-dir", help="Especifica um diretório alternativo para as chaves SSH", required=False, metavar="KEYS_DIR")
+        parser.add_argument("host", nargs="?", help="Nome do host para conexão direta", default=None)
+        args = parser.parse_args()
+
+        config_path = args.file
+        keys_dir = args.keys_dir if args.keys_dir else os.path.dirname(config_path) 
+
+        if not os.path.exists(config_path):
+            print(f"Erro: O arquivo de configuração '{config_path}' não existe.")
+            sys.exit(1)
+
+        if not os.path.exists(keys_dir): 
+            print(f"Erro: O diretório de chaves '{keys_dir}' não existe.")
+            sys.exit(1)
+
         hosts, host_details = listar_hosts_ssh()  # Carrega a lista de hosts
 
         if not hosts:
             print("Nenhum host encontrado.")
             sys.exit(1)
 
-        if len(sys.argv) > 1:
-            # Se um host foi passado na linha de comando, conecta diretamente
-            host_escolhido = sys.argv[1]
-
+        if args.host:
+            host_escolhido = args.host
             if host_escolhido not in hosts:
                 print(f"Erro: O host '{host_escolhido}' não está no arquivo ~/.ssh/config.")
                 sys.exit(1)
@@ -191,10 +234,10 @@ try:
 
             curses.wrapper(menu_navegavel, hosts, host_details)  # Retorna ao menu após sair do SSH
 
-except KeyboardInterrupt:
-    try:
-        curses.endwin() 
-    except curses.error:
-        pass
-    print("\nSaindo... (Ctrl+C pressionado)")
-    sys.exit(0)
+    except KeyboardInterrupt:
+        try:
+            curses.endwin() 
+        except curses.error:
+            pass
+        print("\nSaindo... (Ctrl+C pressionado)")
+        sys.exit(0)
