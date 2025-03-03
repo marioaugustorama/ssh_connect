@@ -12,6 +12,52 @@ from utils import verificar_ou_criar_ssh_config
 
 SSH_CONFIG_PATH = verificar_ou_criar_ssh_config()
 
+def copiar_chave_ssh(host):
+    """Permite que o usuário escolha uma chave local e a copie para o host."""
+    chaves_locais = listar_chaves_locais()
+
+    if not chaves_locais:
+        print("Erro: Nenhuma chave SSH encontrada no diretório ~/.ssh/.")
+        return
+
+    # Abre menu interativo para selecionar a chave local
+    chave_selecionada = curses.wrapper(menu_selecionar_chave, chaves_locais)
+
+    if not chave_selecionada:
+        print("Operação cancelada pelo usuário.")
+        return
+
+    print(f"Enviando chave {chave_selecionada} para {host}...")
+
+    try:
+        subprocess.run(["ssh-copy-id", "-i", chave_selecionada, host], check=True)
+        print(f"Chave {chave_selecionada} adicionada com sucesso a {host}!")
+    except subprocess.CalledProcessError:
+        print(f"Erro ao adicionar a chave {chave_selecionada} ao host {host}.")
+
+
+
+def verificar_chave_no_config(host):
+    """Verifica se o host já tem uma chave associada no ~/.ssh/config"""
+    config_path = os.path.expanduser("~/.ssh/config")
+
+    if not os.path.exists(config_path):
+        return False  # Se o arquivo não existir, assume que não há chave
+
+    with open(config_path, "r") as f:
+        lines = f.readlines()
+    
+    inside_host = False
+    for line in lines:
+        line = line.strip()
+        if line.lower().startswith("host "):
+            inside_host = host in line  # Marca se estamos dentro do bloco do host
+        elif inside_host and line.lower().startswith("identityfile "):
+            return True  # Encontramos uma chave associada a esse host
+    
+    return False  # Nenhuma chave encontrada para esse host
+
+
 def listar_hosts_ssh():
     """Lê o arquivo de configuracao e retorna uma lista de hosts e seus detalhes, incluindo comentários."""
     if not os.path.exists(config_path):
@@ -116,7 +162,7 @@ def menu_lateral(stdscr, hosts, host_details):
             if "Comentário" in host_info and linha_atual < detalhes_altura - 1:
                 detalhes_win.addstr(linha_atual + 1, 2, f"Comentário: {host_info['Comentário']}")
 
-        status_text = f"[↑/↓] Navegar  [Enter] Conectar  [PgUp/PgDn] Rolar  [Home/End] Início/Fim  [Q/Esc] Sair | Hosts: {len(hosts)}"
+        status_text = f"[↑/↓] Navegar  [Enter]  Conectar [F5] Copiar chave [PgUp/PgDn] Rolar  [Home/End] Início/Fim  [Q/Esc] Sair | Hosts: {len(hosts)}"
         stdscr.attron(curses.A_REVERSE)
         stdscr.addstr(altura - 2, 0, status_text[:largura].ljust(largura))
         stdscr.attroff(curses.A_REVERSE)
@@ -140,6 +186,46 @@ def menu_lateral(stdscr, hosts, host_details):
             return hosts[cursor]
         elif key in [27, ord('q')]:
             return None
+        elif key == curses.KEY_F5:  # F5 para copiar chave
+            if not verificar_chave_no_config(hosts[cursor]):
+                copiar_chave_ssh(hosts[cursor])            
+            
+
+
+def menu_selecionar_chave(stdscr, chaves):
+    """Menu interativo para o usuário escolher uma chave SSH."""
+    stdscr.clear()
+    altura, largura = stdscr.getmaxyx()
+    titulo = "Selecione uma chave para adicionar ao host"
+    x_titulo = max(0, (largura - len(titulo)) // 2)
+
+    cursor = 0
+
+    while True:
+        stdscr.clear()
+        stdscr.addstr(1, x_titulo, titulo, curses.A_BOLD)
+
+        for i, chave in enumerate(chaves):
+            x = 5
+            y = 3 + i
+            if i == cursor:
+                stdscr.addstr(y, x, f"> {chave}", curses.A_REVERSE)
+            else:
+                stdscr.addstr(y, x, f"  {chave}")
+
+        stdscr.refresh()
+        key = stdscr.getch()
+
+        if key == curses.KEY_UP and cursor > 0:
+            cursor -= 1
+        elif key == curses.KEY_DOWN and cursor < len(chaves) - 1:
+            cursor += 1
+        elif key == 10:  # Enter
+            return chaves[cursor]
+        elif key in [27, ord('q')]:  # ESC ou Q para sair
+            return None
+
+
 
 
 def criar_config_temporario(config_path, keys_dir):
