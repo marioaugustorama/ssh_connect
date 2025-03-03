@@ -8,9 +8,9 @@ import subprocess
 import argparse
 import tempfile
 from collections import defaultdict
+from utils import verificar_ou_criar_ssh_config
 
-
-SSH_CONFIG_PATH = os.path.expanduser("~/.ssh/config")
+SSH_CONFIG_PATH = verificar_ou_criar_ssh_config()
 
 def listar_hosts_ssh():
     """Lê o arquivo de configuracao e retorna uma lista de hosts e seus detalhes, incluindo comentários."""
@@ -49,7 +49,7 @@ def listar_hosts_ssh():
 
     return hosts, config_data  # Retorna hosts + detalhes
 
-def menu_navegavel(stdscr, hosts, host_details):
+def menu_lateral(stdscr, hosts, host_details):
     """Cria um menu interativo com comentários."""
     stdscr.clear()
     altura, largura = stdscr.getmaxyx()
@@ -225,14 +225,14 @@ if __name__ == "__main__":
 
         # Caso contrário, exibe o menu interativo
         while True:
-            host_escolhido = curses.wrapper(menu_navegavel, hosts, host_details)
+            host_escolhido = curses.wrapper(menu_lateral, hosts, host_details)
 
             if not host_escolhido:
                 break  # Sai do programa se o usuário pressionar Q ou Esc
 
             conectar_ssh(host_escolhido)
 
-            curses.wrapper(menu_navegavel, hosts, host_details)  # Retorna ao menu após sair do SSH
+            curses.wrapper(menu_lateral, hosts, host_details)  # Retorna ao menu após sair do SSH
 
     except KeyboardInterrupt:
         try:
