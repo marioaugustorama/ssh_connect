@@ -1,40 +1,44 @@
 #!/bin/env python3
 
 import os
-import re
 import sys
 import curses
 import subprocess
 import argparse
 import tempfile
 from collections import defaultdict
-from utils import verificar_ou_criar_ssh_config
+from utils import verificar_ou_criar_ssh_config, listar_chaves_locais, obter_host_user
 
-SSH_CONFIG_PATH = verificar_ou_criar_ssh_config()
-
-def copiar_chave_ssh(host):
+def copiar_chave_ssh(stdscr, host, keys_dir):
     """Permite que o usuário escolha uma chave local e a copie para o host."""
-    chaves_locais = listar_chaves_locais()
+    chaves_locais = listar_chaves_locais(keys_dir)
 
     if not chaves_locais:
-        print("Erro: Nenhuma chave SSH encontrada no diretório ~/.ssh/.")
+        print(f"Erro: Nenhuma chave SSH encontrada no diretório {keys_dir}")
         return
 
     # Abre menu interativo para selecionar a chave local
-    chave_selecionada = curses.wrapper(menu_selecionar_chave, chaves_locais)
+    chave_selecionada = menu_selecionar_chave(stdscr, chaves_locais)
 
     if not chave_selecionada:
         print("Operação cancelada pelo usuário.")
         return
 
+    # Sai do curses antes de executar o ssh-copy-id
+    curses.endwin()
     print(f"Enviando chave {chave_selecionada} para {host}...")
 
     try:
-        subprocess.run(["ssh-copy-id", "-i", chave_selecionada, host], check=True)
+        hostname_real, usuario = obter_host_user(host, config_path)
+        subprocess.run(["ssh-copy-id", "-i", chave_selecionada, f"{usuario}@{hostname_real}"], check=True)
         print(f"Chave {chave_selecionada} adicionada com sucesso a {host}!")
     except subprocess.CalledProcessError:
         print(f"Erro ao adicionar a chave {chave_selecionada} ao host {host}.")
 
+    # Reinicia o curses após o comando
+    stdscr.clear()
+    curses.initscr()
+    stdscr.refresh()
 
 
 def verificar_chave_no_config(host):
@@ -58,7 +62,7 @@ def verificar_chave_no_config(host):
     return False  # Nenhuma chave encontrada para esse host
 
 
-def listar_hosts_ssh():
+def listar_hosts_ssh(config_path):
     """Lê o arquivo de configuracao e retorna uma lista de hosts e seus detalhes, incluindo comentários."""
     if not os.path.exists(config_path):
         print(f"Erro: O arquivo de configuração '{config_path} não existe.")
@@ -94,6 +98,7 @@ def listar_hosts_ssh():
                     config_data[host_atual][chave] = valor
 
     return hosts, config_data  # Retorna hosts + detalhes
+
 
 def menu_lateral(stdscr, hosts, host_details):
     """Cria um menu interativo com comentários."""
@@ -188,44 +193,54 @@ def menu_lateral(stdscr, hosts, host_details):
             return None
         elif key == curses.KEY_F5:  # F5 para copiar chave
             if not verificar_chave_no_config(hosts[cursor]):
-                copiar_chave_ssh(hosts[cursor])            
-            
+                copiar_chave_ssh(stdscr, hosts[cursor], keys_dir)
 
 
 def menu_selecionar_chave(stdscr, chaves):
-    """Menu interativo para o usuário escolher uma chave SSH."""
-    stdscr.clear()
-    altura, largura = stdscr.getmaxyx()
-    titulo = "Selecione uma chave para adicionar ao host"
-    x_titulo = max(0, (largura - len(titulo)) // 2)
+    curses.curs_set(0)  # Oculta o cursor
+    curses.start_color()
+    
+    # Definição de cores
+    curses.init_pair(1, curses.COLOR_BLACK, curses.COLOR_WHITE)  # Fundo branco
+    curses.init_pair(2, curses.COLOR_WHITE, curses.COLOR_BLACK)  # Seleção preta
 
-    cursor = 0
+    altura, largura = stdscr.getmaxyx()
+    
+    # Pegar apenas os nomes das chaves, sem os caminhos
+    nomes_chaves = [os.path.basename(chave) for chave in chaves]
+    
+    largura_menu = max(len(chave) for chave in chaves) + 4
+    altura_menu = len(chaves) + 2
+    x_inicio = (largura - largura_menu) // 2
+    y_inicio = (altura - altura_menu) // 2
+
+    win = curses.newwin(altura_menu, largura_menu, y_inicio, x_inicio)
+    win.box()
+    win.bkgd(' ', curses.color_pair(1))  # Mantém fundo branco
+
+    selecionado = 0
+    win.keypad(True)  # Ativa captura de setas do teclado
 
     while True:
-        stdscr.clear()
-        stdscr.addstr(1, x_titulo, titulo, curses.A_BOLD)
-
-        for i, chave in enumerate(chaves):
-            x = 5
-            y = 3 + i
-            if i == cursor:
-                stdscr.addstr(y, x, f"> {chave}", curses.A_REVERSE)
+        for i, nome_chave in enumerate(nomes_chaves):
+            if i == selecionado:
+                win.attron(curses.color_pair(2))
+                win.addstr(i + 1, 2, nome_chave.ljust(largura_menu - 4))
+                win.attroff(curses.color_pair(2))
             else:
-                stdscr.addstr(y, x, f"  {chave}")
+                win.addstr(i + 1, 2, nome_chave.ljust(largura_menu - 4), curses.color_pair(1))
 
-        stdscr.refresh()
-        key = stdscr.getch()
+        win.refresh()
+        tecla = win.getch()
 
-        if key == curses.KEY_UP and cursor > 0:
-            cursor -= 1
-        elif key == curses.KEY_DOWN and cursor < len(chaves) - 1:
-            cursor += 1
-        elif key == 10:  # Enter
-            return chaves[cursor]
-        elif key in [27, ord('q')]:  # ESC ou Q para sair
-            return None
-
-
+        if tecla in (curses.KEY_UP, ord('k')) and selecionado > 0:
+            selecionado -= 1
+        elif tecla in (curses.KEY_DOWN, ord('j')) and selecionado < len(chaves) - 1:
+            selecionado += 1
+        elif tecla in [10, 13]:  # Enter
+            return chaves[selecionado]
+        elif tecla in [27, ord('q')]:  # ESC ou Q para sair
+            return None  # Permite sair sem selecionar nada
 
 
 def criar_config_temporario(config_path, keys_dir):
@@ -275,16 +290,19 @@ def conectar_ssh(host):
     ssh_command = ["ssh", "-F", final_config_path, host]
     subprocess.run(ssh_command)
 
+
 if __name__ == "__main__":
     try:
         parser = argparse.ArgumentParser(description="Gerenciador de conexões SSH")
-        parser.add_argument("-f", "--file", help="Especifica um arquivo de configuração SSH", required=False, metavar="CONFIG", default=SSH_CONFIG_PATH)
+        parser.add_argument("-f", "--file", help="Especifica um arquivo de configuração SSH", required=False, metavar="CONFIG")
         parser.add_argument("-k", "--keys-dir", help="Especifica um diretório alternativo para as chaves SSH", required=False, metavar="KEYS_DIR")
         parser.add_argument("host", nargs="?", help="Nome do host para conexão direta", default=None)
         args = parser.parse_args()
 
-        config_path = args.file
+        config_path = args.file if args.file else os.path.expanduser("~/.ssh/config")
         keys_dir = args.keys_dir if args.keys_dir else os.path.dirname(config_path) 
+
+        SSH_CONFIG_PATH = verificar_ou_criar_ssh_config(config_path)
 
         if not os.path.exists(config_path):
             print(f"Erro: O arquivo de configuração '{config_path}' não existe.")
@@ -294,7 +312,7 @@ if __name__ == "__main__":
             print(f"Erro: O diretório de chaves '{keys_dir}' não existe.")
             sys.exit(1)
 
-        hosts, host_details = listar_hosts_ssh()  # Carrega a lista de hosts
+        hosts, host_details = listar_hosts_ssh(config_path)  # Carrega a lista de hosts
 
         if not hosts:
             print("Nenhum host encontrado.")
@@ -303,7 +321,7 @@ if __name__ == "__main__":
         if args.host:
             host_escolhido = args.host
             if host_escolhido not in hosts:
-                print(f"Erro: O host '{host_escolhido}' não está no arquivo ~/.ssh/config.")
+                print(f"Erro: O host '{host_escolhido}' não está no arquivo {config_path}")
                 sys.exit(1)
 
             conectar_ssh(host_escolhido)
