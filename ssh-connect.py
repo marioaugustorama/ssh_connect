@@ -3,13 +3,14 @@
 import os
 import sys
 import curses
+import shlex
 import subprocess
 import argparse
 import tempfile
 from collections import defaultdict
 from utils import verificar_ou_criar_ssh_config, listar_chaves_locais, obter_host_user
 
-def copiar_chave_ssh(stdscr, host, keys_dir):
+def copiar_chave_ssh(stdscr, host, keys_dir, config_path):
     """Permite que o usuário escolha uma chave local e a copie para o host."""
     chaves_locais = listar_chaves_locais(keys_dir)
 
@@ -41,16 +42,14 @@ def copiar_chave_ssh(stdscr, host, keys_dir):
     stdscr.refresh()
 
 
-def verificar_chave_no_config(host):
-    """Verifica se o host já tem uma chave associada no ~/.ssh/config"""
-    config_path = os.path.expanduser("~/.ssh/config")
-
+def verificar_chave_no_config(host, config_path):
+    """Verifica se o host já tem uma chave associada no arquivo informado."""
     if not os.path.exists(config_path):
         return False  # Se o arquivo não existir, assume que não há chave
 
     with open(config_path, "r") as f:
         lines = f.readlines()
-    
+
     inside_host = False
     for line in lines:
         line = line.strip()
@@ -58,7 +57,7 @@ def verificar_chave_no_config(host):
             inside_host = host in line  # Marca se estamos dentro do bloco do host
         elif inside_host and line.lower().startswith("identityfile "):
             return True  # Encontramos uma chave associada a esse host
-    
+
     return False  # Nenhuma chave encontrada para esse host
 
 
@@ -100,7 +99,7 @@ def listar_hosts_ssh(config_path):
     return hosts, config_data  # Retorna hosts + detalhes
 
 
-def menu_lateral(stdscr, hosts, host_details):
+def menu_lateral(stdscr, hosts, host_details, keys_dir, config_path):
     """Cria um menu interativo com comentários."""
     stdscr.clear()
     altura, largura = stdscr.getmaxyx()
@@ -192,8 +191,8 @@ def menu_lateral(stdscr, hosts, host_details):
         elif key in [27, ord('q')]:
             return None
         elif key == curses.KEY_F5:  # F5 para copiar chave
-            if not verificar_chave_no_config(hosts[cursor]):
-                copiar_chave_ssh(stdscr, hosts[cursor], keys_dir)
+            if not verificar_chave_no_config(hosts[cursor], config_path):
+                copiar_chave_ssh(stdscr, hosts[cursor], keys_dir, config_path)
 
 
 def menu_selecionar_chave(stdscr, chaves):
@@ -245,23 +244,40 @@ def menu_selecionar_chave(stdscr, chaves):
 
 def criar_config_temporario(config_path, keys_dir):
     """Cria um arquivo de configuração temporário com os caminhos de `IdentityFile` ajustados."""
-    temp_config = tempfile.NamedTemporaryFile(delete=False, mode="w")
+    temp_config = tempfile.NamedTemporaryFile(delete=False, mode="w", encoding="utf-8")
     temp_path = temp_config.name
 
-    with open(config_path, "r") as original, open(temp_path, "w") as temp:
+    with open(config_path, "r", encoding="utf-8") as original, open(temp_path, "w", encoding="utf-8") as temp:
         for linha in original:
-            if linha.strip().startswith("IdentityFile") and keys_dir:
-                _, old_path = linha.split(maxsplit=1)
-                filename = os.path.basename(old_path.strip())
-                new_path = os.path.join(keys_dir, filename)
-                temp.write(f"  IdentityFile {new_path}\n")
+            linha_sem_quebra = linha.rstrip("\n")
+            stripped = linha_sem_quebra.strip()
+
+            if stripped.lower().startswith("identityfile") and keys_dir:
+                indent = linha_sem_quebra[: len(linha_sem_quebra) - len(linha_sem_quebra.lstrip())]
+                try:
+                    parts = shlex.split(stripped)
+                except ValueError:
+                    temp.write(linha)
+                    continue
+
+                if not parts or parts[0].lower() != "identityfile":
+                    temp.write(linha)
+                    continue
+
+                novos_caminhos = []
+                for caminho in parts[1:]:
+                    filename = os.path.basename(caminho)
+                    novo_caminho = os.path.join(keys_dir, filename)
+                    novos_caminhos.append(shlex.quote(novo_caminho))
+
+                temp.write(f"{indent}IdentityFile {' '.join(novos_caminhos)}\n")
             else:
                 temp.write(linha)
 
     return temp_path  # Retorna o caminho do arquivo temporário
 
 
-def conectar_ssh(host):
+def conectar_ssh(host, config_path, keys_dir):
     """Mostra a box de conexão, sai do modo curses e inicia o SSH."""
     def _mostrar_mensagem(stdscr):
         """Mostra a box "Conectando ao host..." antes de sair do modo curses."""
@@ -283,12 +299,21 @@ def conectar_ssh(host):
     # Exibe a mensagem antes de sair do modo curses
     curses.wrapper(_mostrar_mensagem)
 
+    temp_config_path = None
+    final_config_path = config_path
+
     # Se um diretório de chaves foi informado, criar um config temporário
-    final_config_path = criar_config_temporario(config_path, keys_dir) if keys_dir else config_path
+    if keys_dir:
+        temp_config_path = criar_config_temporario(config_path, keys_dir)
+        final_config_path = temp_config_path
 
     # Inicia a conexão SSH sem interferência do curses
     ssh_command = ["ssh", "-F", final_config_path, host]
-    subprocess.run(ssh_command)
+    try:
+        subprocess.run(ssh_command)
+    finally:
+        if temp_config_path and os.path.exists(temp_config_path):
+            os.remove(temp_config_path)
 
 
 if __name__ == "__main__":
@@ -324,19 +349,17 @@ if __name__ == "__main__":
                 print(f"Erro: O host '{host_escolhido}' não está no arquivo {config_path}")
                 sys.exit(1)
 
-            conectar_ssh(host_escolhido)
+            conectar_ssh(host_escolhido, config_path, keys_dir)
             sys.exit(0)  # Sai após a conexão SSH
 
         # Caso contrário, exibe o menu interativo
         while True:
-            host_escolhido = curses.wrapper(menu_lateral, hosts, host_details)
+            host_escolhido = curses.wrapper(menu_lateral, hosts, host_details, keys_dir, config_path)
 
             if not host_escolhido:
                 break  # Sai do programa se o usuário pressionar Q ou Esc
 
-            conectar_ssh(host_escolhido)
-
-            curses.wrapper(menu_lateral, hosts, host_details)  # Retorna ao menu após sair do SSH
+            conectar_ssh(host_escolhido, config_path, keys_dir)
 
     except KeyboardInterrupt:
         try:
