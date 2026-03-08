@@ -19,12 +19,14 @@ Este script permite listar, selecionar e conectar-se a servidores SSH com base e
 ### 🔹 **Requisitos**
 - Python 3.x
 - Módulos padrão: `curses`, `subprocess`, `tempfile`, `argparse`
+- Dependência adicional para a TUI: `textual`
 
 ### 🔹 **Clonar o repositório**
 ```sh
 git clone https://github.com/marioaugustorama/ssh_connect.git
 cd ssh_connect
 chmod +x ssh-connect.py
+python3 -m pip install -r requirements.txt
 ```
 
 🛠️ Uso
@@ -64,11 +66,11 @@ Isso conectará diretamente ao host meu-servidor, utilizando as configurações 
 Exibe todas as opções disponíveis.
 ```
 
-6️⃣ Iniciar o esqueleto da interface Textual
+6️⃣ Iniciar a interface Textual
 ```sh
 ./ssh-connect.py --ui textual
 
-Abre a base inicial da interface Textual. Requer a dependência `textual` instalada.
+Abre a interface Textual com abas de `Home`, `Hosts`, `Keys` e `Logs`.
 ```
 
 📌 Atalhos do Menu Interativo
@@ -105,12 +107,15 @@ Selecione um host para conectar
 
 📋 Exportação de logs das conexões.
 
-## Estrutura inicial para integração
+## Estrutura da interface Textual
 
-O projeto agora começa a separar a lógica em serviços para facilitar a integração futura com o `devops-tools`:
+O projeto agora usa uma estrutura compatível com o padrão visual do `devops-tools`, mantendo a lógica separada em serviços:
 
 - `src/ssh_connect/services/config_service.py`
 - `src/ssh_connect/services/key_service.py`
 - `src/ssh_connect/services/ssh_service.py`
 - `src/ssh_connect/tui/app.py`
-
+- `src/ssh_connect/tui/screens/home.py`
+- `src/ssh_connect/tui/screens/hosts.py`
+- `src/ssh_connect/tui/screens/keys.py`
+- `src/ssh_connect/tui/screens/logs.py`
