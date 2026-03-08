@@ -10,6 +10,7 @@ Este script permite listar, selecionar e conectar-se a servidores SSH com base e
 - ✅ **Modifica automaticamente os caminhos de `IdentityFile`**, se necessário.
 - ✅ **Conexão direta** via linha de comando sem passar pelo menu interativo.
 - ✅ **Interface curses** com barra de status e detalhes do host selecionado.
+- ✅ Base inicial para futura migração para **Textual**.
 
 ---
 
@@ -63,6 +64,13 @@ Isso conectará diretamente ao host meu-servidor, utilizando as configurações 
 Exibe todas as opções disponíveis.
 ```
 
+6️⃣ Iniciar o esqueleto da interface Textual
+```sh
+./ssh-connect.py --ui textual
+
+Abre a base inicial da interface Textual. Requer a dependência `textual` instalada.
+```
+
 📌 Atalhos do Menu Interativo
 
 | Tecla | Função |
@@ -97,4 +105,12 @@ Selecione um host para conectar
 
 📋 Exportação de logs das conexões.
 
+## Estrutura inicial para integração
+
+O projeto agora começa a separar a lógica em serviços para facilitar a integração futura com o `devops-tools`:
+
+- `src/ssh_connect/services/config_service.py`
+- `src/ssh_connect/services/key_service.py`
+- `src/ssh_connect/services/ssh_service.py`
+- `src/ssh_connect/tui/app.py`
 
