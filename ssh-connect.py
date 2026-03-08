@@ -207,7 +207,7 @@ def conectar_ssh(host, config_path, keys_dir):
     run_ssh_connection(host, config_path, keys_dir)
 
 
-def iniciar_textual(config_path):
+def iniciar_textual(config_path, keys_dir):
     """Inicializa o esqueleto da interface Textual."""
     try:
         from src.ssh_connect.tui.app import SSHConnectTextualApp
@@ -215,7 +215,7 @@ def iniciar_textual(config_path):
         print(exc)
         sys.exit(1)
 
-    app = SSHConnectTextualApp(config_path=config_path)
+    app = SSHConnectTextualApp(config_path=config_path, keys_dir=keys_dir)
     app.run()
 
 
@@ -257,7 +257,7 @@ if __name__ == "__main__":
             sys.exit(0)  # Sai após a conexão SSH
 
         if args.ui == "textual":
-            iniciar_textual(config_path)
+            iniciar_textual(config_path, keys_dir)
             sys.exit(0)
 
         # Caso contrário, exibe o menu interativo

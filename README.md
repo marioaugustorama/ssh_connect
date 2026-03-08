@@ -19,6 +19,12 @@ Este script permite listar, selecionar e conectar-se a servidores SSH com base e
 ### 🔹 **Requisitos**
 - Python 3.x
 - Módulos padrão: `curses`, `subprocess`, `tempfile`, `argparse`
+- Para a interface `Textual`, recomenda-se usar um ambiente virtual:
+```sh
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+```
 
 ### 🔹 **Clonar o repositório**
 ```sh
@@ -68,8 +74,18 @@ Exibe todas as opções disponíveis.
 ```sh
 ./ssh-connect.py --ui textual
 
-Abre a base inicial da interface Textual. Requer a dependência `textual` instalada.
+Abre a interface Textual. Requer a dependência `textual` instalada.
 ```
+
+### Atalhos da interface Textual
+
+| Tecla | Função |
+|------ | ------ |
+| ↑ / ↓ | Navegar entre os hosts |
+| Enter | Conectar ao host selecionado |
+| F5 | Selecionar uma chave local e executar `ssh-copy-id` |
+| R | Recarregar a lista de hosts |
+| Q | Sair |
 
 📌 Atalhos do Menu Interativo
 
@@ -113,4 +129,3 @@ O projeto agora começa a separar a lógica em serviços para facilitar a integr
 - `src/ssh_connect/services/key_service.py`
 - `src/ssh_connect/services/ssh_service.py`
 - `src/ssh_connect/tui/app.py`
-
