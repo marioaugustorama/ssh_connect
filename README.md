@@ -68,10 +68,17 @@ Exibe todas as opções disponíveis.
 
 6️⃣ Iniciar a interface Textual
 ```sh
-./ssh-connect.py --ui textual
+./ssh-connect.py
 
 Abre a interface Textual com abas de `Home`, `Hosts`, `Keys` e `Logs`.
 ```
+
+7️⃣ Usar a interface curses em terminais lentos
+```sh
+./ssh-connect.py --ui curses
+```
+
+Usa a interface legada baseada em `curses`. Se a interface `textual` não estiver disponível, o programa também volta automaticamente para esse modo.
 
 📌 Atalhos do Menu Interativo
 

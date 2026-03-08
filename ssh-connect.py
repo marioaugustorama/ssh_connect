@@ -212,10 +212,11 @@ def iniciar_textual(config_path, keys_dir):
     try:
         from src.ssh_connect.tui.app import main as run_textual_app
     except ImportError as exc:
-        print(exc)
-        sys.exit(1)
+        print(f"Textual indisponível ({exc}). Voltando para a interface curses.")
+        return False
 
     run_textual_app(config_path=config_path, keys_dir=keys_dir)
+    return True
 
 
 if __name__ == "__main__":
@@ -223,7 +224,12 @@ if __name__ == "__main__":
         parser = argparse.ArgumentParser(description="Gerenciador de conexões SSH")
         parser.add_argument("-f", "--file", help="Especifica um arquivo de configuração SSH", required=False, metavar="CONFIG")
         parser.add_argument("-k", "--keys-dir", help="Especifica um diretório alternativo para as chaves SSH", required=False, metavar="KEYS_DIR")
-        parser.add_argument("--ui", choices=["curses", "textual"], default="curses", help="Seleciona a interface interativa")
+        parser.add_argument(
+            "--ui",
+            choices=["curses", "textual"],
+            default="textual",
+            help="Seleciona a interface interativa (padrão: textual; use curses para terminais lentos)",
+        )
         parser.add_argument("host", nargs="?", help="Nome do host para conexão direta", default=None)
         args = parser.parse_args()
 
@@ -256,8 +262,8 @@ if __name__ == "__main__":
             sys.exit(0)  # Sai após a conexão SSH
 
         if args.ui == "textual":
-            iniciar_textual(config_path, keys_dir)
-            sys.exit(0)
+            if iniciar_textual(config_path, keys_dir):
+                sys.exit(0)
 
         # Caso contrário, exibe o menu interativo
         while True:
