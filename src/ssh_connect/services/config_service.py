@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import getpass
 import os
 import shlex
 import tempfile
@@ -36,27 +37,39 @@ def parse_ssh_hosts(config_path: str) -> tuple[list[str], dict[str, dict[str, st
     config_data: dict[str, dict[str, str]] = defaultdict(dict)
     hosts: list[str] = []
     current_comment = None
+    current_hosts: list[str] = []
+
+    def register_host(host_name: str) -> None:
+        if host_name not in hosts:
+            hosts.append(host_name)
+        config_data[host_name] = {}
+        if current_comment:
+            config_data[host_name]["Comentário"] = current_comment
 
     with open(config_path, "r", encoding="utf-8") as config_file:
-        current_host = None
-
         for line in config_file:
             stripped_line = line.strip()
 
             if stripped_line.startswith("##"):
                 current_comment = stripped_line[2:].strip()
             elif stripped_line.lower().startswith("host "):
-                current_host = stripped_line.split(maxsplit=1)[1]
-                hosts.append(current_host)
-                config_data[current_host] = {}
+                host_tokens = [
+                    token
+                    for token in shlex.split(stripped_line)[1:]
+                    if not any(marker in token for marker in ("*", "?", "!"))
+                ]
+
+                current_hosts = host_tokens
+                for host_name in current_hosts:
+                    register_host(host_name)
 
                 if current_comment:
-                    config_data[current_host]["Comentário"] = current_comment
                     current_comment = None
-            elif current_host and " " in stripped_line:
+            elif current_hosts and " " in stripped_line:
                 key, value = stripped_line.split(maxsplit=1)
                 if key != "#":
-                    config_data[current_host][key] = value
+                    for host_name in current_hosts:
+                        config_data[host_name][key] = value
 
     return hosts, dict(config_data)
 
@@ -72,7 +85,8 @@ def host_has_identity_file(host: str, config_path: str) -> bool:
         for line in config_file:
             stripped_line = line.strip()
             if stripped_line.lower().startswith("host "):
-                inside_host = host in stripped_line
+                host_tokens = shlex.split(stripped_line)[1:]
+                inside_host = host in host_tokens
             elif inside_host and stripped_line.lower().startswith("identityfile "):
                 return True
 
@@ -85,7 +99,7 @@ def get_host_user(host: str, config_path: str | None = None) -> tuple[str, str]:
         config_path = os.path.expanduser("~/.ssh/config")
 
     hostname = None
-    user = "root"
+    user = getpass.getuser()
     capturing = False
 
     if not os.path.exists(config_path):
@@ -97,7 +111,7 @@ def get_host_user(host: str, config_path: str | None = None) -> tuple[str, str]:
             stripped_line = line.strip()
 
             if stripped_line.lower().startswith("host "):
-                capturing = host in stripped_line.split()[1:]
+                capturing = host in shlex.split(stripped_line)[1:]
                 continue
 
             if capturing:

@@ -3,13 +3,12 @@ from __future__ import annotations
 import os
 import subprocess
 
-from src.ssh_connect.services.config_service import create_temp_config_with_keys, get_host_user
+from src.ssh_connect.services.config_service import create_temp_config_with_keys
 
 
 def copy_ssh_key(host: str, selected_key: str, config_path: str) -> None:
     """Copy a selected key to the target host using ssh-copy-id."""
-    hostname, user = get_host_user(host, config_path)
-    subprocess.run(["ssh-copy-id", "-i", selected_key, f"{user}@{hostname}"], check=True)
+    subprocess.run(["ssh-copy-id", "-F", config_path, "-i", selected_key, host], check=True)
 
 
 def connect_ssh(host: str, config_path: str, keys_dir: str | None) -> None:
