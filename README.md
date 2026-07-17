@@ -26,50 +26,66 @@ Este projeto lista hosts do `~/.ssh/config` ou de um arquivo alternativo, permit
 git clone https://github.com/marioaugustorama/ssh_connect.git
 cd ssh_connect
 chmod +x ssh-connect.py
-python3 -m pip install -r requirements.txt
+```
+
+### 🔹 **Instalar com venv**
+```sh
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install .
+```
+
+### 🔹 **Instalar com pipx**
+```sh
+pipx install .
+```
+
+Se quiser apenas testar sem instalar:
+```sh
+python3 ssh-connect.py --help
 ```
 
 ## Uso
 
 1️⃣ Modo Interativo padrão
 ```sh
-./ssh-connect.py
+ssh-connect
 ```
 Isso abre a interface Textual usando `~/.ssh/config`.
 
 2️⃣ Usando um Arquivo de Configuração Personalizado
 ```sh
-./ssh-connect.py -f /meu/arquivo/config
+ssh-connect -f /meu/arquivo/config
 ```
 Isso carrega os hosts a partir de `/meu/arquivo/config`.
 
 3️⃣ Definir um Diretório Alternativo para Chaves
 ```sh
-./ssh-connect.py -f /meu/arquivo/config -k /minhas/chaves
+ssh-connect -f /meu/arquivo/config -k /minhas/chaves
 ```
 Isso substitui os caminhos de `IdentityFile` para `/minhas/chaves/`.
 
 4️⃣ Conectar Diretamente a um Host Sem Menu
 ```sh
-./ssh-connect.py -f /meu/arquivo/config -k /minhas/chaves meu-servidor
+ssh-connect -f /meu/arquivo/config -k /minhas/chaves meu-servidor
 ```
 Isso conecta diretamente ao host `meu-servidor` usando o config informado.
 
 5️⃣ Ajuda e Opções Disponíveis
 ```sh
-./ssh-connect.py --help
+ssh-connect --help
 ```
 Exibe todas as opções disponíveis.
 
 6️⃣ Iniciar a interface Textual explicitamente
 ```sh
-./ssh-connect.py --ui textual
+ssh-connect --ui textual
 ```
 Abre a interface Textual com abas de `Home`, `Hosts`, `Keys` e `Logs`.
 
 7️⃣ Usar a interface curses em terminais lentos
 ```sh
-./ssh-connect.py --ui curses
+ssh-connect --ui curses
 ```
 Usa a interface legada baseada em `curses`. Se a interface Textual não estiver disponível, o programa também volta automaticamente para esse modo.
 
